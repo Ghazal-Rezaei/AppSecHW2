@@ -1,1 +1,6 @@
 
+script:
+  - python manage.py makemigrations LegacySite
+  - python manage.py makemigrations
+  - python manage.py migrate
+  - sh import_dbs.sh
