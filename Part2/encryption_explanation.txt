@@ -1,0 +1,8 @@
+Gift Card Data Encryption:
+Based on my search, the most prevalent and straightforward library to serve this purpose seemed to be django-cryptography.
+Using this module, I use the secret key provided at "settings.py" to encrypt the card information in "models.py"; In the card table, I encrypted the amount, data, and fp columns; The first one for integrity protection and the next two for confidentiality as asked by the homework description (the changes are accordingly applied to the code).
+
+Key Management:
+Again, based on my search, the best option seemed to be the one described at "dev.to" which suggested making the secret key an environmental variable that cannot be accessed by the public. So, I created a ".env" file in the root of my project and copy and pasted the secret key in "settings.py" into the "SECRET_KEY" field of it. Please note that the environmental variables will not be uploaded into github because ".gitignore" explicitly prevents it.
+Again, in "settings.py", I removed the cleartext  secret key and replaced it with the following code, which will read it from the env:
+SECRET_KEY = str(os.getenv('SECRET_KEY'))

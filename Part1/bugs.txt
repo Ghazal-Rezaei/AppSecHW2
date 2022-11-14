@@ -1,0 +1,35 @@
+Part1
+
+XSS:
+Based on my experience with Django I knew, by default, it provides protection against XSS by escaping the input string. Yet, there is a keyword to disable this default protection in case a developer needs! The keyword is "safe"; I searched for this keyword in the repository of homework2 and luckily found it in two of the HTML files: "gift.html" and "item-single.html". I realized the keyword "safe" was used to display the parameter "director"; When I searched for the mentioned word in the same repository, I found out that this parameter was being received through a Get request from the user and no other sanitization mechanism was applied to it. This, made "director" an entry point for my XSS attack. I ran the web application on my local machine, and in the item-single.html page, I added a get request as follows (It should be noted that I had to type "buy.html" in the URL as it actually executes the "views.buy_card_view" which in turn displays "item-single.html"):
+http://127.0.0.1:8000/buy.html?director=<script>alert(1)</script>
+And the alert actually poped up. Please note that this simple script could be something more complicated that sent the documents cookie to an attacker-controlled server. Also, I wanted to try the same with "gift.html" which seemed to have a similar problem but I needed to keep this one intact to do the following part of the homework!
+To fix the problem, I edited "item-single.html" by removing the keyword "safe" when processing the "director" parameter; After doing this, the above script didn't work any longer.
+
+CSRF:
+The problem description of part 1.2 was similar to a CSRF attack. Therefore, I looked for the ways to launch this attack; By default, Django protects against this attack by enforcing a CSRF token. Yet, in older versions of Django this protection mechanism could be disabled with the "csrf_exempt" decorator. Thus, in my first attempt, I searched for this key_word in the homework repo and didn't find any instances.
+Django apps are completely secure against CSRF unless there's an XSS vulnerability which can be exploited to perform a CSRF; In this case, "gift.html" had the required vulnerability. Thus, I injected a script into the "director" parameter again, this time to gift a gift-card to a user without the first user's notice and consent. The script looked like this:
+http://127.0.0.1:8000/gift.html?director=%3Cscript%3E%20var%20req=new%20XMLHttpRequest();%20var%20inject=new%20FormData();%20req.open(%22POST%22,%27/gift/0%27,true);%20inject.append(%22username%22,%22gr2312%22);%20inject.append(%22amount%22,%22200%22);%20req.send(inject);%3C/script%3E
+It successfully does the job and, when I checked, the destination user will actually receive the gift card!
+To fix it, again I removed the "safe" decorator when processing the parameter "director" in the "gift.html" file. As a result the mentioned attack could not be launched again.
+
+SQLi:
+Instead of using ORM, the code directly uses SQL which brings about the possiblity of SQLi attacks; The only SQL queries I could find that received and immediately applied the data from users without any sanitization/parameterization, were those in the "use_card_view" of the "views.py"; One of which took the "signature" and the other took the "request.user.id".
+I couldn't find a way to tamper with "request.user.id", but its query was still vulnerable probably exploitable if I used fancier tools. On the other hand, to inject my desired sql query into "signature", I went to the "use.html" page which would call the vulnerable view. Then, I fabricated a giftcard named "sqli.gftcrd" with the following script:
+{"merchant_id": "NYU Apparel Card", "customer_id": "gr2312", "total_value": "200", "records": [{"record_type": "amount_change", "amount_added": 200, "signature": "[ insert crypto signature here ]'UNION SELECT password FROM LegacySite_user WHERE username = 'admin"}]}
+Upon upload, the sql query in the malicious gift card was attached to the original query in the code and as a result hashed admin password was return as follows:
+Found card with data: Card object (000000000000000000000000000078d2$18821d89de11ab18488fdc0a01f1ddf4d290e198b0f80cd4974fc031dc2615a3) 
+To fix this problem, it's way better if we could completely discard the raw sql and access data with ORM instead. Yet, an easier solution is tp parameterize the query in the "raw" method so that it will get this form: MyModel.objects.raw(sql, [param1, param2]).
+Parameterized statements are a mechanism to pass any dynamic parameters separate from the SQL query. They’re either interpreted directly by the database or safely escaped before being added to the query. Using this method, I changed the original code to the following (Note the comma acting as a separator between the original query and the values passed to it!
+        card_query = Card.objects.raw('select id from LegacySite_card where data = \'%s\'', signature)
+        user_cards = Card.objects.raw(
+            'select id, count(*) as count from LegacySite_card where LegacySite_card.user_id = %s', str(
+                request.user.id))
+After the fix, when I uploaded the same malicious gift card using the same approach as above, the attack no longer worked.
+
+CommandInjection:
+Another form of web attacks is the command injection attack; Here, the application will execute shell commands which receive some parameters from the user. If these paramaters are not escaped and sanitized properly, the user can inject and execute their shell codes on the server.
+To find this vulnerability, I searched for keywords like exec, system, os, etc. I found a system method in "parse_card_data" function of the "extras.py"; This method received a filename from the user through the "use_card_view" in "views.py". Based on this, the user can tamper with the filename to inject a shell command. But, they need to fabricate a gift card file that raises a JSONDecodeError or UnicodeDecodeError for the shell command to reach the proper line in the code and get executed. Therefore, I made a new giftcard "named cmdi.gftcrd" with broken json and for the name of it I chose "sth; pwd;". Please note that the simple shell code I entered could be another more complicated one getting a reverse shell for the attacker's server.
+To fix the issue, I imported the quote method of shlex and applied it immediately after receiving the file name to escape potential special characters. I also went ahead and parameterized "card_file_path" by adding the "card_fname" as a string during the run time; it looks like this:
+        card_file_path = f'/tmp/%s_{request.user.id}_parser.gftcrd',card_fname
+        card_file_path = f'/tmp/%s_{request.user.id}_{user_cards[0].count + 1}.gftcrd',card_fname
